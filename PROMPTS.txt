@@ -1,0 +1,136 @@
+PROMPTS
+
+# Archivo de Prompts para la Creación de la App "PredectIA"
+
+Este documento contiene la secuencia de prompts principales utilizados para desarrollar la aplicación de bienestar cardiometabólico con React, TypeScript y la API de Gemini.
+
+---
+
+### Prompt 1: Estructura Inicial y Flujo de la Aplicación
+
+**Objetivo:** Crear el esqueleto de la aplicación con un sistema de fases (pantallas) y componentes básicos.
+
+**Prompt:**
+"Actúa como un experto en React y TypeScript. Necesito crear una aplicación de una sola página llamada 'PredectIA'. La aplicación tendrá un flujo de 3 fases: `Welcome`, `Questionnaire` y `Results`.
+
+1.  Crea un archivo `App.tsx` que maneje el estado de la fase actual.
+2.  Define un `enum Phase` en `types.ts` para las fases.
+3.  Crea tres componentes de placeholder: `Phase0Welcome.tsx`, `Phase1Questionnaire.tsx` y `Phase3Results.tsx`.
+4.  En `App.tsx`, renderiza el componente correspondiente a la fase activa.
+5.  Añade un encabezado con un logo SVG simple y el título 'PredectIA', y un pie de página con una advertencia de uso no médico.
+6.  Utiliza Tailwind CSS para el diseño general, con un contenedor centrado y un fondo gris claro."
+
+---
+
+### Prompt 2: Definición de las Estructuras de Datos
+
+**Objetivo:** Establecer los tipos de datos que se usarán en toda la aplicación para garantizar la coherencia.
+
+**Prompt:**
+"Basado en nuestra app 'PredectIA', vamos a definir las interfaces de TypeScript en el archivo `types.ts`.
+
+1.  Crea una interfaz `HabitsData`. Debe incluir campos para los datos que recopilaremos en el cuestionario:
+    *   `age`, `height`, `weight` (numbers)
+    *   `activityLevel` (number, 0-5)
+    *   `stressLevel` ('Bajo', 'Medio', 'Alto')
+    *   `smoker` ('Sí', 'No') y un `smokingFrequency` opcional.
+    *   `familyHistory` ('Sí', 'No') y `familyHistoryDetails` (array de strings).
+    *   Frecuencias de dieta y alcohol, y horas de sueño.
+
+2.  Crea una interfaz `WellnessPlan`. Esta será la estructura del objeto JSON que esperamos de la IA. Debe incluir:
+    *   `riskLevel` ('BAJO', 'MODERADO', 'ALTO')
+    *   `score` (number, 0-100)
+    *   `motivationalMessage` (string)
+    *   Recomendaciones de dieta, actividad y sueño (strings).
+    *   `drivers`: un array de objetos con `factor` (string) y `contribution` (number).
+    *   `medicalWarning` (string)."
+
+---
+
+### Prompt 3: Construcción del Cuestionario Interactivo
+
+**Objetivo:** Desarrollar el formulario de la fase 2 para recopilar los datos del usuario.
+
+**Prompt:**
+"Ahora, implementa el componente `Phase1Questionnaire.tsx`.
+
+1.  Crea un estado local para almacenar los datos del formulario, usando la interfaz `HabitsData` como base.
+2.  Diseña un formulario con `fieldset` para agrupar las preguntas por categorías: 'Perfil Físico', 'Hábitos de Vida', 'Sueño', y 'Nutrición'.
+3.  Usa controles interactivos para una mejor experiencia de usuario:
+    *   `<input type="range">` para edad, altura, peso, horas de sueño y frecuencias de dieta. Muestra el valor actual junto al slider.
+    *   Botones o `<select>` para `activityLevel` y `stressLevel`.
+    *   `<input type="radio">` para preguntas de 'Sí/No' como `smoker` y `familyHistory`.
+4.  Implementa lógica condicional: si el usuario selecciona que fuma, muestra un `<select>` para la frecuencia. Si tiene antecedentes familiares, muestra checkboxes para los detalles.
+5.  Al enviar el formulario, debe llamar a la función `onComplete` pasada por props con todos los datos recopilados."
+
+---
+
+### Prompt 4: Creación del Servicio de IA con Gemini (El Prompt Más Relevante)
+
+**Objetivo:** Crear el corazón de la aplicación: la lógica para llamar a la API de Gemini y obtener el plan de bienestar.
+
+**Prompt:**
+"Crea un archivo `services/geminiService.ts` para interactuar con la API de Gemini.
+
+1.  Importa `GoogleGenAI` y `Type` desde `@google/genai`.
+2.  Define un `wellnessPlanSchema` que coincida exactamente con la interfaz `WellnessPlan`. Este esquema se usará para forzar la salida JSON de la IA. Usa los `enum` y `description` apropiados para cada campo.
+3.  Crea una función `buildPrompt(data: HabitsData): string`. Esta función es CRÍTICA. Debe tomar los datos del usuario y construir un prompt detallado en español. El prompt debe instruir a la IA sobre cómo analizar los datos y generar cada campo del JSON. **Usa este texto como base para el prompt que la función debe generar:**
+
+    ```
+    Analiza el siguiente perfil de usuario para una evaluación de riesgo cardiometabólico. La salida debe ser un JSON que se ajuste al esquema proporcionado y estar completamente en español.
+
+    Datos del Usuario:
+    - Edad: ${data.age}
+    - IMC: ${imc} (calculado de ${data.weight}kg y ${data.height}cm)
+    - Nivel de Actividad: ${data.activityLevel} (0=sedentario, 5=atleta)
+    - Nivel de Estrés: ${data.stressLevel}
+    - Fumador: ${smokerInfo}
+    - Antecedentes Familiares: ${data.familyHistory}
+    - Detalles de Antecedentes: ${data.familyHistoryDetails.join(', ') || 'Ninguno'}
+    - Frecuencia de consumo de vegetales (semanal): ${data.vegetableFrequency}/7
+    - Frecuencia de consumo de comida procesada (semanal): ${data.processedFoodFrequency}/7
+    - Frecuencia de consumo de alcohol (0=nunca, 3=frecuente/diario): ${data.alcoholFrequency}
+    - Horas de sueño promedio: ${data.sleepHours}
+
+    Instrucciones para la IA:
+    1.  **riskLevel**: Clasifica el riesgo en BAJO, MODERADO o ALTO.
+    2.  **score**: Asigna un puntaje de 0 a 100. Un IMC > 25, fumar, estrés alto, sedentarismo, antecedentes, etc., deben aumentar el puntaje.
+    3.  **drivers**: Identifica los 3-5 factores más importantes. La 'contribution' debe ser un porcentaje. Los factores deben ser concisos (ej. 'IMC Alto', no 'IMC es un poco alto (26.1)'). Los hábitos positivos (ej. 'Actividad Física') deben tener contribución negativa. La suma de los valores absolutos debe ser cercana a 100.
+    4.  **recommendations**: Proporciona recomendaciones accionables y personalizadas.
+    5.  **motivationalMessage**: Escribe un mensaje de apertura alentador.
+    6.  **medicalWarning**: Incluye la advertencia médica estándar.
+    ```
+
+4.  Crea una función asíncrona `generateWellnessPlan(data: HabitsData): Promise<WellnessPlan>`. Esta función debe:
+    *   Llamar a `buildPrompt` con los datos del usuario.
+    *   Llamar a `ai.models.generateContent` usando el modelo `gemini-2.5-flash`.
+    *   En la configuración (`config`), establece `responseMimeType: "application/json"` y pasa el `responseSchema`.
+    *   Parsear la respuesta de texto a JSON y devolverla.
+    *   Implementa un bloque `try/catch` para manejar errores de la API, devolviendo un objeto `WellnessPlan` de error."
+
+---
+
+### Prompt 5: Diseño de la Pantalla de Resultados y Gráfico de Drivers
+
+**Objetivo:** Mostrar los resultados de la IA de una manera clara, visual y atractiva.
+
+**Prompt:**
+"Finalmente, implementa los componentes de resultados.
+
+1.  **En `Phase3Results.tsx`:**
+    *   Usa `useEffect` para llamar a `generateWellnessPlan` cuando el componente se monte.
+    *   Muestra un indicador de carga (spinner) mientras se esperan los datos.
+    *   Muestra un mensaje de error si la llamada a la API falla.
+    *   Una vez que se reciben los datos del `WellnessPlan`:
+        *   Muestra el `riskLevel` y el `score` de forma destacada, usando colores (rojo para alto, amarillo para moderado, verde para bajo).
+        *   Muestra el `motivationalMessage`.
+        *   Organiza las recomendaciones de dieta, actividad y sueño en tarjetas separadas.
+        *   Muestra la `medicalWarning` en una caja de alerta.
+        *   Añade botones para 'Editar Respuestas' (volver al cuestionario) y 'Empezar de Nuevo' (volver a la pantalla de bienvenida).
+
+2.  **Crea un nuevo componente `DriversChart.tsx`:**
+    *   Este componente recibe la propiedad `drivers`.
+    *   Debe renderizar una barra horizontal para cada 'driver'.
+    *   La longitud de la barra (`width`) debe ser proporcional a `Math.abs(driver.contribution)`.
+    *   El color de la barra debe ser rojo si `contribution` es positiva (aumenta el riesgo) y verde si es negativa (reduce el riesgo).
+    *   Muestra el nombre del factor y el porcentaje de contribución junto a cada barra."
